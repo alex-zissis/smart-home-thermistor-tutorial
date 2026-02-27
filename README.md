@@ -1,0 +1,41 @@
+# ESP32 Thermistor Smart Home Tutorial (Vite + React)
+
+Interactive client-side tutorial for building a Freenove Section 12 thermistor sensor and integrating it with Home Assistant over MQTT.
+
+## Run locally
+
+```bash
+cd tutorial-web
+npm install
+npm run dev
+```
+
+## Production build
+
+```bash
+npm run build
+npm run preview
+```
+
+Build output is in `tutorial-web/dist` and can be deployed to static hosting.
+
+## Pages hosting notes
+
+- `vite.config.js` uses `base: './'` so the app can be served from a subpath.
+- For GitHub Pages, publish the `dist` folder (or use an action).
+- For Google-hosted static pages, upload `dist` contents as-is.
+
+## What is interactive
+
+- Developer-onramp guided path from Arduino IDE install to Home Assistant dashboard.
+- Includes an early Sketch 1.1 Blink warmup step to practice breadboard wiring + flashing before MQTT work.
+- Teaching aids include concept mapping from common software patterns to embedded/MQTT workflows.
+- Visuals included: IDE setup flow, serial monitor preview, Blink circuit image from absolute page 42, and thermistor circuit image from page 115.
+- Inline coding cards in the firmware step guide learners to implement `setupWifi`, `setupMqtt`, `calculateTempC`, and `report` from stubs.
+- Workshop reference assets now live in `tutorial-web/src/assets`: `C_Tutorial.pdf` and `Sketch_12.1.Thermometer.ino`.
+- Step-by-step completion checklist with local progress persistence.
+- Guided Steps support Accordion Mode and Focus Mode (slideshow-style with Prev/Next and arrow keys).
+- Instructor Mode is enabled by URL query param `?debug=1` and reveals coaching notes per step plus workshop diagnostics commands.
+- Config builder for WiFi/MQTT values.
+- Generated snippets for Arduino sketch constants, Home Assistant YAML, and MQTT verification commands.
+- Thermistor math sandbox (ADC -> voltage/resistance/temperature).
