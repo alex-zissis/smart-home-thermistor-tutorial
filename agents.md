@@ -17,15 +17,19 @@
   - `npm run build`
 
 ## Publishing to GitHub Pages
+This repo does **manual** Pages publishing from `main/docs`. Always build and sync before pushing.
+
 1. Build production assets:
    - `npm run build`
 2. Refresh `docs/` from `dist/` (delete stale hashed bundles):
    - `rsync -a --delete dist/ docs/`
-3. Commit and push:
+3. Verify `docs/.nojekyll` exists so Pages serves assets without Jekyll processing:
+   - `touch docs/.nojekyll`
+4. Commit and push:
    - `git add -A`
    - `git commit -m "Update tutorial site"`
    - `git push origin main`
-4. Verify site:
+5. Verify site:
    - `https://alex-zissis.github.io/smart-home-thermistor-tutorial/`
 
 ## Quick troubleshooting
