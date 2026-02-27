@@ -1,16 +1,42 @@
-import { useEffect, useMemo, useState } from 'react';
-import breadboardFromPdf from './assets/section12-page115.png';
-import blinkFromPdf from './assets/section1-blink-page42.png';
-import tutorialPdf from './assets/C_Tutorial.pdf';
-import completedSketch from './assets/Sketch_12.1.Thermometer.ino?url';
+import { useEffect, useState } from 'react';
+import CodeBlock, { type CodeLanguage } from '../components/CodeBlock';
+import { ConceptMappingContent } from '../components/GuideInfoContent';
+import breadboardFromPdf from '../assets/section12-page115.png';
+import blinkFromPdf from '../assets/section1-blink-page42.png';
+
+type VisualType = 'ide' | 'blink' | 'breadboard' | 'serial';
+
+type Step = {
+  id: string;
+  phase: string;
+  title: string;
+  summary: string;
+  details: string[];
+  visual?: VisualType;
+};
+
+type LearningNote = {
+  concept: string;
+  terms: string[];
+  codeWalkthrough?: string;
+};
+
+type CodeCard = {
+  id: string;
+  title: string;
+  objective: string;
+  stub: string;
+  doneWhen: string[];
+  hints: string[];
+};
 
 const STORAGE_KEYS = {
   checklist: 'tutorial_checklist_v3',
-  config: 'tutorial_config_v1',
-  codeCards: 'tutorial_code_cards_v1'
+  codeCards: 'tutorial_code_cards_v1',
+  conceptSeen: 'tutorial_concept_seen_v1'
 };
 
-const STEPS = [
+const STEPS: Step[] = [
   {
     id: 'install_ide',
     phase: 'Setup',
@@ -155,28 +181,11 @@ const STEPS = [
   }
 ];
 
-const DEFAULT_CONFIG = {
-  wifiSsid: 'YOUR_WIFI_SSID',
-  wifiPassword: 'YOUR_WIFI_PASSWORD',
-  brokerIp: '192.168.1.28',
-  brokerPort: '1883',
-  topic: 'home/workshop/temperature',
-  sensorName: 'Workshop Temperature',
-  deviceName: 'ESP32 Thermistor',
-  intervalSeconds: '10'
-};
-
 const BOARD_MANAGER_SNIPPET = `Additional boards manager URLs:
 https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
 Then install in Boards Manager:
 ESP32 by Espressif Systems`;
-
-const LIBRARY_SNIPPET = `Arduino IDE -> Library Manager -> search:
-PubSubClient (by Nick OLeary)
-
-Required baud rate in this project:
-115200`;
 
 const BLINK_WARMUP_SNIPPET = `// Warmup: simple blink (adapt LED pin to your page 42 wiring if needed)
 const int LED_PIN = 4;
@@ -192,6 +201,12 @@ void loop() {
   delay(500);
 }`;
 
+const LIBRARY_SNIPPET = `Arduino IDE -> Library Manager -> search:
+PubSubClient (by Nick OLeary)
+
+Required baud rate in this project:
+115200`;
+
 const SERIAL_SNIPPET = `Expected serial output (115200):
 Setup start
 Connecting to YOUR_WIFI_SSID
@@ -201,59 +216,6 @@ Connecting to MQTT Broker 192.168.x.x:1883
 Connected to MQTT
 ADC value : 2060,  Voltage : 1.66V,  Temperature : 24.12C`;
 
-const INSTRUCTOR_NOTES = {
-  install_ide: [
-    'Have participants confirm they can open IDE before connecting hardware.',
-    'Keep one known-good USB data cable at the front for quick cable swap testing.'
-  ],
-  blink_warmup: [
-    'Run this as a hard checkpoint before moving to thermistor + MQTT complexity.',
-    'If Blink fails, stop and fix board/port/wiring basics first.'
-  ],
-  add_esp32_board: [
-    'Common issue: URL pasted with trailing spaces or missing https.',
-    'If installation fails, ask them to restart IDE and re-open Boards Manager.'
-  ],
-  install_libraries: [
-    'Students often install similarly named libraries by mistake; verify exact library author.',
-    'If compile fails on PubSubClient include, re-open Library Manager and check installed version.'
-  ],
-  breadboard: [
-    'Have students point to the ADC node physically before connecting jumper to GPIO34.',
-    'Most wiring errors are power rail mistakes; check rails first, then component rows.'
-  ],
-  first_upload: [
-    'If upload stalls, hold BOOT button on ESP32 during upload start.',
-    'Wrong serial port selection is the top first-hour blocker in workshops.'
-  ],
-  mqtt_flash: [
-    'Validate broker IP on projector and have everyone paste from a shared source.',
-    'Encourage topic naming convention by table/group to avoid collisions in shared LAN.'
-  ],
-  services: [
-    'Run services before firmware troubleshooting to avoid false negatives.',
-    'If one container fails, use logs command in diagnostics panel below.'
-  ],
-  mqtt_test: [
-    'Ask students to read one live payload aloud to confirm end-to-end path.',
-    'If payload is retained and stale, power cycle sensor and compare timestamp behavior.'
-  ],
-  ha_mqtt: [
-    'If broker auth is disabled in workshop, explicitly call that out as LAN-only for safety.',
-    'Keep one pre-configured HA instance as fallback demo for stuck participants.'
-  ],
-  ha_entity: [
-    'Unique_id must stay stable; changing it creates duplicate entities in HA.',
-    'Use Developer Tools -> States to validate raw entity state before dashboard card setup.'
-  ],
-  dashboard: [
-    'Have students gently pinch thermistor between fingers for visible temperature rise.',
-    'Close with a short recap on data path: sensor -> ESP32 -> MQTT -> Home Assistant.'
-  ]
-};
-
-const INSTRUCTOR_DIAGNOSTICS = `# Docker service status\ndocker compose ps\n\n# Container logs\ndocker compose logs --tail=80 mosquitto\ndocker compose logs --tail=80 homeassistant\n\n# Check MQTT publish path manually\nmosquitto_pub -h 192.168.1.28 -p 1883 -t home/workshop/temperature -m 23.5 -r`;
-
 const FUNCTION_CONTRACTS_SNIPPET = `// Provide implementations for these contracts (no starter implementation given):
 void setupWifi();          // connect ESP32 to WiFi, retry until connected
 void setupMqtt();          // connect MQTT client to broker, retry until connected
@@ -261,6 +223,68 @@ double calculateTempC();   // read ADC and return temperature in Celsius
 void report(double tempC); // publish temperature payload to MQTT topic
 
 // Hint: keep setup() and loop() thin, and delegate work to these helpers.`;
+
+const FULL_FIRMWARE_TEMPLATE_SNIPPET = `#include <WiFi.h>
+#include <PubSubClient.h>
+
+#define PIN_ANALOG_IN 34
+
+const char *WIFI_SSID = "YOUR_WIFI_SSID";
+const char *WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+
+const char *MQTT_BROKER = "192.168.x.x";
+const int MQTT_PORT = 1883;
+const char *MQTT_TOPIC = "home/workshop/temperature";
+
+unsigned long lastSendMs = 0;
+
+WiFiClient wifiClient;
+PubSubClient mqtt(wifiClient);
+
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+
+  Serial.println("Setup start");
+  setupWifi();
+  setupMqtt();
+  Serial.println("Setup End");
+}
+
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    setupWifi();
+  }
+  if (!mqtt.connected()) {
+    setupMqtt();
+  }
+
+  mqtt.loop(); // run every loop iteration
+
+  if (millis() - lastSendMs < 10000) {
+    return; // report every 10 seconds
+  }
+
+  lastSendMs = millis();
+  report(calculateTempC());
+}
+
+void setupWifi() {
+  // TODO: begin WiFi and block/retry until WL_CONNECTED
+}
+
+void setupMqtt() {
+  // TODO: set server and block/retry until mqtt.connected() is true
+}
+
+double calculateTempC() {
+  // TODO: paste/use the provided calculateTempC implementation from Card C
+  return 0.0;
+}
+
+void report(double tempC) {
+  // TODO: format payload and publish to MQTT_TOPIC (retain=true)
+}`;
 
 const CALCULATE_TEMP_C_SNIPPET = `double calculateTempC() {
   // Freenove section 12 constants (10k NTC thermistor, Beta 3950)
@@ -285,7 +309,7 @@ const CALCULATE_TEMP_C_SNIPPET = `double calculateTempC() {
   return tempC;
 }`;
 
-const CODE_CARDS = [
+const CODE_CARDS: CodeCard[] = [
   {
     id: 'setup_wifi',
     title: 'Card A: write setupWifi()',
@@ -360,34 +384,58 @@ const CODE_CARDS = [
   }
 ];
 
-const SKETCH_STRUCTURE_SNIPPET = `// scaffold only: you implement helper functions yourself
-unsigned long lastSendMs = 0;
+const INSTRUCTOR_NOTES: Record<string, string[]> = {
+  install_ide: [
+    'Have participants confirm they can open IDE before connecting hardware.',
+    'Keep one known-good USB data cable at the front for quick cable swap testing.'
+  ],
+  blink_warmup: [
+    'Run this as a hard checkpoint before moving to thermistor + MQTT complexity.',
+    'If Blink fails, stop and fix board/port/wiring basics first.'
+  ],
+  add_esp32_board: [
+    'Common issue: URL pasted with trailing spaces or missing https.',
+    'If installation fails, ask them to restart IDE and re-open Boards Manager.'
+  ],
+  install_libraries: [
+    'Students often install similarly named libraries by mistake; verify exact library author.',
+    'If compile fails on PubSubClient include, re-open Library Manager and check installed version.'
+  ],
+  breadboard: [
+    'Have students point to the ADC node physically before connecting jumper to GPIO34.',
+    'Most wiring errors are power rail mistakes; check rails first, then component rows.'
+  ],
+  first_upload: [
+    'If upload stalls, hold BOOT button on ESP32 during upload start.',
+    'Wrong serial port selection is the top first-hour blocker in workshops.'
+  ],
+  mqtt_flash: [
+    'Validate broker IP on projector and have everyone paste from a shared source.',
+    'Encourage topic naming convention by table/group to avoid collisions in shared LAN.'
+  ],
+  services: [
+    'Run services before firmware troubleshooting to avoid false negatives.',
+    'If one container fails, use logs command in diagnostics panel below.'
+  ],
+  mqtt_test: [
+    'Ask students to read one live payload aloud to confirm end-to-end path.',
+    'If payload is retained and stale, power cycle sensor and compare timestamp behavior.'
+  ],
+  ha_mqtt: [
+    'If broker auth is disabled in workshop, explicitly call that out as LAN-only for safety.',
+    'Keep one pre-configured HA instance as fallback demo for stuck participants.'
+  ],
+  ha_entity: [
+    'Unique_id must stay stable; changing it creates duplicate entities in HA.',
+    'Use Developer Tools -> States to validate raw entity state before dashboard card setup.'
+  ],
+  dashboard: [
+    'Have students gently pinch thermistor between fingers for visible temperature rise.',
+    'Close with a short recap on data path: sensor -> ESP32 -> MQTT -> Home Assistant.'
+  ]
+};
 
-void setup() {
-  Serial.begin(115200);
-  setupWifi();
-  setupMqtt();
-}
-
-// runs forever after setup() finishes
-void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    setupWifi();
-  }
-  if (!mqtt.connected()) {
-    setupMqtt();
-  }
-  mqtt.loop(); // run every loop iteration
-
-  if (millis() - lastSendMs < 10000) {
-    return; // only publish every 10 seconds
-  }
-
-  lastSendMs = millis();
-  report(calculateTempC()); // call your own implementations
-}`;
-
-const LEARNING_NOTES = {
+const LEARNING_NOTES: Record<string, LearningNote> = {
   install_ide: {
     concept:
       'Treat ESP32 like a tiny edge runtime: Arduino IDE is your editor + build + flash pipeline for that target device.',
@@ -414,8 +462,7 @@ const LEARNING_NOTES = {
     terms: ['Rail: shared power bus', 'Node: equivalent to a shared variable', 'Voltage divider: analog signal conditioner']
   },
   first_upload: {
-    concept:
-      'Upload is build + deploy. Serial Monitor is your live log stream from the board process.',
+    concept: 'Upload is build + deploy. Serial Monitor is your live log stream from the board process.',
     terms: ['Compile: target binary build', 'Flash: deploy binary to device memory', 'Baud rate: serial link configuration']
   },
   mqtt_flash: {
@@ -425,98 +472,76 @@ const LEARNING_NOTES = {
       'setup(): startup lifecycle hook',
       'loop(): long-running event loop',
       'helper contracts: behavior spec without implementation'
-    ],
-    codeWalkthrough: `${FUNCTION_CONTRACTS_SNIPPET}\n\n${SKETCH_STRUCTURE_SNIPPET}`
+    ]
   },
   services: {
-    concept:
-      'Mosquitto is your message bus; Home Assistant is a consuming app with entity/state modeling on top.',
+    concept: 'Mosquitto is your message bus; Home Assistant is a consuming app with entity/state modeling on top.',
     terms: ['Broker: pub/sub router', 'Container: isolated service runtime', 'docker compose: local orchestration']
   },
   mqtt_test: {
-    concept:
-      'Use pub/sub probes like integration tests: one producer, one consumer, fixed channel.',
+    concept: 'Use pub/sub probes like integration tests: one producer, one consumer, fixed channel.',
     terms: ['Publish: emit event payload', 'Subscribe: consume event stream', 'Topic: routing key']
   },
   ha_mqtt: {
-    concept:
-      'Home Assistant integration is a connector config that binds your broker to HA entity state updates.',
+    concept: 'Home Assistant integration is a connector config that binds your broker to HA entity state updates.',
     terms: ['Integration: connector plugin', 'Entity: typed domain object', 'State: current persisted value']
   },
   ha_entity: {
-    concept:
-      'YAML here acts like declarative schema: identity + metadata controls how HA interprets your stream.',
+    concept: 'YAML here acts like declarative schema: identity + metadata controls how HA interprets your stream.',
     terms: ['YAML: declarative config', 'unique_id: immutable primary key', 'device_class: semantic type hint']
   },
   dashboard: {
-    concept:
-      'Dashboard is the final read model. A changing card confirms full pipeline health from ADC read to UI render.',
+    concept: 'Dashboard is the final read model. A changing card confirms full pipeline health from ADC read to UI render.',
     terms: ['Card: UI projection of state', 'End-to-end: full data path check', 'Retained message: last-known event snapshot']
   }
 };
 
-function loadFromStorage(key, fallback) {
+function loadFromStorage<T extends Record<string, unknown>>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) {
       return fallback;
     }
-    return { ...fallback, ...JSON.parse(raw) };
+    return { ...fallback, ...(JSON.parse(raw) as Partial<T>) };
   } catch {
     return fallback;
   }
 }
 
-function slugify(value) {
-  return (
-    value
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'sensor'
-  );
+function hasSeenConceptMapping(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.conceptSeen) === '1';
+  } catch {
+    return false;
+  }
 }
 
-function calculateTemp(adc) {
-  const adcClamped = Math.max(1, Math.min(4094, adc));
-  const rFixed = 10.0;
-  const r0 = 10.0;
-  const beta = 3950.0;
-  const voltage = (adcClamped / 4095.0) * 3.3;
-  const rt = (r0 * voltage) / (3.3 - voltage);
-  const tempK = 1 / (1 / (273.15 + 25) + Math.log(rt / rFixed) / beta);
-  const tempC = tempK - 273.15;
+function sanitizeViewMode(value: string | null): 'accordion' | 'focus' {
+  return value === 'accordion' ? 'accordion' : 'focus';
+}
 
+function sanitizeStepId(value: string | null): string {
+  return STEPS.some((step) => step.id === value) ? (value as string) : STEPS[0].id;
+}
+
+function readGuideRouteState() {
+  const params = new URLSearchParams(window.location.search);
   return {
-    voltage,
-    resistance: rt,
-    tempC
+    mode: sanitizeViewMode(params.get('mode')),
+    stepId: sanitizeStepId(params.get('step'))
   };
 }
 
-function CodeBlock({ code }) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
-    } catch {
-      setCopied(false);
-    }
+function writeGuideRouteState(mode: 'accordion' | 'focus', stepId: string, replace = true) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('mode', sanitizeViewMode(mode));
+  url.searchParams.set('step', sanitizeStepId(stepId));
+  const nextUrl = `${url.pathname}?${url.searchParams.toString()}${url.hash}`;
+  if (replace) {
+    window.history.replaceState(null, '', nextUrl);
+    return;
   }
-
-  return (
-    <div className="code-wrap">
-      <button className="copy-btn" onClick={handleCopy} type="button">
-        {copied ? 'Copied' : 'Copy'}
-      </button>
-      <pre>
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
+  window.history.pushState(null, '', nextUrl);
 }
 
 function IdeFlowVisual() {
@@ -573,7 +598,7 @@ function BreadboardVisual() {
   );
 }
 
-function StepVisual({ type }) {
+function StepVisual({ type }: { type: VisualType }) {
   if (type === 'blink') {
     return <BlinkVisual />;
   }
@@ -589,7 +614,13 @@ function StepVisual({ type }) {
   return null;
 }
 
-function CodeCardsInline({ codeCards, onToggleCodeCard, onResetCodeCards }) {
+type CodeCardsInlineProps = {
+  codeCards: Record<string, boolean>;
+  onToggleCodeCard: (cardId: string) => void;
+  onResetCodeCards: () => void;
+};
+
+function CodeCardsInline({ codeCards, onToggleCodeCard, onResetCodeCards }: CodeCardsInlineProps) {
   const completedCards = Object.values(codeCards).filter(Boolean).length;
   const cardsProgress = Math.round((completedCards / CODE_CARDS.length) * 100);
 
@@ -601,9 +632,7 @@ function CodeCardsInline({ codeCards, onToggleCodeCard, onResetCodeCards }) {
           Reset
         </button>
       </div>
-      <p>
-        Implement these in your sketch now, before moving to broker/Home Assistant steps.
-      </p>
+      <p>Implement these in your sketch now, before moving to broker/Home Assistant steps.</p>
       <div className="progress-row" aria-label="coding card progress">
         <span>
           Coding cards complete: {completedCards}/{CODE_CARDS.length}
@@ -619,7 +648,7 @@ function CodeCardsInline({ codeCards, onToggleCodeCard, onResetCodeCards }) {
           <article key={card.id} className={`code-challenge-card ${codeCards[card.id] ? 'done' : ''}`}>
             <h3>{card.title}</h3>
             <p>{card.objective}</p>
-            <CodeBlock code={card.stub} />
+            <CodeBlock code={card.stub} language="cpp" />
             <h4>Done When</h4>
             <ul>
               {card.doneWhen.map((item) => (
@@ -649,18 +678,37 @@ function CodeCardsInline({ codeCards, onToggleCodeCard, onResetCodeCards }) {
   );
 }
 
+type StepContentProps = {
+  step: Step;
+  snippet?: string;
+  snippetLanguage?: CodeLanguage;
+  isDone: boolean;
+  onToggleDone: () => void;
+  completeVariant?: 'default' | 'prominent';
+  showCompletionControl?: boolean;
+  instructorMode: boolean;
+  instructorNotes?: string[];
+  learningNote?: LearningNote;
+  codeCards: Record<string, boolean>;
+  onToggleCodeCard: (cardId: string) => void;
+  onResetCodeCards: () => void;
+};
+
 function StepContent({
   step,
   snippet,
+  snippetLanguage = 'plaintext',
   isDone,
   onToggleDone,
+  completeVariant = 'default',
+  showCompletionControl = true,
   instructorMode,
   instructorNotes,
   learningNote,
   codeCards,
   onToggleCodeCard,
   onResetCodeCards
-}) {
+}: StepContentProps) {
   return (
     <>
       <p>{step.summary}</p>
@@ -678,7 +726,7 @@ function StepContent({
               <li key={term}>{term}</li>
             ))}
           </ul>
-          {learningNote.codeWalkthrough ? <CodeBlock code={learningNote.codeWalkthrough} /> : null}
+          {learningNote.codeWalkthrough ? <CodeBlock code={learningNote.codeWalkthrough} language="cpp" /> : null}
         </aside>
       ) : null}
       {instructorMode && instructorNotes?.length ? (
@@ -692,7 +740,7 @@ function StepContent({
         </aside>
       ) : null}
       {step.visual ? <StepVisual type={step.visual} /> : null}
-      {snippet ? <CodeBlock code={snippet} /> : null}
+      {snippet ? <CodeBlock code={snippet} language={snippetLanguage} /> : null}
       {step.id === 'mqtt_flash' ? (
         <CodeCardsInline
           codeCards={codeCards}
@@ -700,99 +748,60 @@ function StepContent({
           onResetCodeCards={onResetCodeCards}
         />
       ) : null}
-      <label className="complete-row">
-        <input type="checkbox" checked={isDone} onChange={onToggleDone} />
-        <span>Mark this step complete</span>
-      </label>
+      {showCompletionControl ? (
+        <label className={`complete-row ${completeVariant === 'prominent' ? 'complete-row-prominent' : ''}`}>
+          <input type="checkbox" checked={isDone} onChange={onToggleDone} />
+          <span>Mark this step complete</span>
+        </label>
+      ) : null}
     </>
   );
 }
 
-export default function App() {
+export default function GuidePage() {
+  const routeState = readGuideRouteState();
+  const isFirstConceptRun = !hasSeenConceptMapping();
   const initialChecklist = Object.fromEntries(STEPS.map((step) => [step.id, false]));
   const initialCodeCards = Object.fromEntries(CODE_CARDS.map((card) => [card.id, false]));
 
-  const [checklist, setChecklist] = useState(() =>
+  const [checklist, setChecklist] = useState<Record<string, boolean>>(() =>
     loadFromStorage(STORAGE_KEYS.checklist, initialChecklist)
   );
-  const [codeCards, setCodeCards] = useState(() =>
+  const [codeCards, setCodeCards] = useState<Record<string, boolean>>(() =>
     loadFromStorage(STORAGE_KEYS.codeCards, initialCodeCards)
   );
+  const [viewMode, setViewMode] = useState<'accordion' | 'focus'>(routeState.mode);
+  const [activeStepId, setActiveStepId] = useState(routeState.stepId);
+  const [needsConceptContinue, setNeedsConceptContinue] = useState(isFirstConceptRun);
+  const showIntroCards = needsConceptContinue;
 
-  const [config, setConfig] = useState(() => loadFromStorage(STORAGE_KEYS.config, DEFAULT_CONFIG));
-  const [adc, setAdc] = useState(2048);
-  const [viewMode, setViewMode] = useState('accordion');
-  const [activeStepId, setActiveStepId] = useState(STEPS[0].id);
-  const [instructorMode] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('debug') === '1';
-  });
+  const instructorMode = new URLSearchParams(window.location.search).get('debug') === '1';
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.checklist, JSON.stringify(checklist));
   }, [checklist]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.config, JSON.stringify(config));
-  }, [config]);
-
-  useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.codeCards, JSON.stringify(codeCards));
   }, [codeCards]);
 
+  useEffect(() => {
+    writeGuideRouteState(viewMode, activeStepId, true);
+  }, [viewMode, activeStepId]);
+
+  useEffect(() => {
+    function onPopState() {
+      const route = readGuideRouteState();
+      setViewMode(route.mode);
+      setActiveStepId(route.stepId);
+    }
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   const completed = Object.values(checklist).filter(Boolean).length;
   const progress = Math.round((completed / STEPS.length) * 100);
-
-  const calc = useMemo(() => calculateTemp(adc), [adc]);
-
-  const firmwareSnippet = useMemo(
-    () => `const char *WIFI_SSID       = "${config.wifiSsid}";
-const char *WIFI_PASSWORD   = "${config.wifiPassword}";
-
-const char* MQTT_BROKER = "${config.brokerIp}";
-const int   MQTT_PORT   = ${config.brokerPort};
-const char* MQTT_TOPIC  = "${config.topic}";
-
-// in loop(), publish every ${config.intervalSeconds} seconds
-if (millis() - lastSendMs < ${Number(config.intervalSeconds) * 1000 || 10000}) {
-  return;
-}`,
-    [config]
-  );
-
-  const sensorId = slugify(`${config.deviceName}_${config.sensorName}`);
-
-  const homeAssistantYaml = useMemo(
-    () => `mqtt:
-  sensor:
-    - name: "${config.sensorName}"
-      unique_id: "${sensorId}"
-      state_topic: "${config.topic}"
-      unit_of_measurement: "C"
-      device_class: temperature
-      state_class: measurement
-      device:
-        name: "${config.deviceName}"
-        identifiers:
-          - "${slugify(config.deviceName)}"`,
-    [config, sensorId]
-  );
-
-  const startServicesCommand = useMemo(
-    () => 'docker compose up -d mosquitto homeassistant',
-    []
-  );
-
-  const subscribeCommand = useMemo(
-    () => `mosquitto_sub -h ${config.brokerIp} -p ${config.brokerPort} -t ${config.topic} -v`,
-    [config]
-  );
-
-  const testCommands = useMemo(
-    () => `${startServicesCommand}
-${subscribeCommand}`,
-    [startServicesCommand, subscribeCommand]
-  );
 
   const activeIndex = Math.max(
     0,
@@ -800,18 +809,23 @@ ${subscribeCommand}`,
   );
   const activeStep = STEPS[activeIndex];
 
-  const stepSnippets = {
+  const stepSnippets: Record<string, string> = {
     blink_warmup: BLINK_WARMUP_SNIPPET,
     add_esp32_board: BOARD_MANAGER_SNIPPET,
     install_libraries: LIBRARY_SNIPPET,
     first_upload: SERIAL_SNIPPET,
-    mqtt_flash: FUNCTION_CONTRACTS_SNIPPET,
-    services: startServicesCommand,
-    mqtt_test: subscribeCommand,
-    ha_entity: homeAssistantYaml
+    mqtt_flash: FULL_FIRMWARE_TEMPLATE_SNIPPET
   };
 
-  function setStepByIndex(index) {
+  const stepSnippetLanguages: Record<string, CodeLanguage> = {
+    blink_warmup: 'cpp',
+    add_esp32_board: 'plaintext',
+    install_libraries: 'plaintext',
+    first_upload: 'plaintext',
+    mqtt_flash: 'cpp'
+  };
+
+  function setStepByIndex(index: number) {
     const clamped = Math.max(0, Math.min(STEPS.length - 1, index));
     setActiveStepId(STEPS[clamped].id);
   }
@@ -820,11 +834,22 @@ ${subscribeCommand}`,
     setStepByIndex(activeIndex + 1);
   }
 
+  function goNextWithAutoComplete() {
+    const currentStepId = STEPS[activeIndex].id;
+    setChecklist((prev) => {
+      if (prev[currentStepId]) {
+        return prev;
+      }
+      return { ...prev, [currentStepId]: true };
+    });
+    setStepByIndex(activeIndex + 1);
+  }
+
   function goPrevious() {
     setStepByIndex(activeIndex - 1);
   }
 
-  function toggleDone(stepId, shouldAdvance = false) {
+  function toggleDone(stepId: string, shouldAdvance = false) {
     setChecklist((prev) => {
       const nextValue = !prev[stepId];
       if (shouldAdvance && nextValue && activeIndex < STEPS.length - 1) {
@@ -834,12 +859,7 @@ ${subscribeCommand}`,
     });
   }
 
-  function handleInput(event) {
-    const { name, value } = event.target;
-    setConfig((prev) => ({ ...prev, [name]: value }));
-  }
-
-  function toggleCodeCard(cardId) {
+  function toggleCodeCard(cardId: string) {
     setCodeCards((prev) => ({ ...prev, [cardId]: !prev[cardId] }));
   }
 
@@ -851,12 +871,29 @@ ${subscribeCommand}`,
     setCodeCards(initialCodeCards);
   }
 
+  function continueFromConceptMapping() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.conceptSeen, '1');
+    } catch {
+      // Ignore storage errors and continue workshop flow.
+    }
+    window.dispatchEvent(
+      new CustomEvent('workshop:conceptSeenChanged', {
+        detail: { showHint: true }
+      })
+    );
+    setNeedsConceptContinue(false);
+    window.setTimeout(() => {
+      document.getElementById('guided-steps')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }
+
   useEffect(() => {
     if (viewMode !== 'focus') {
-      return undefined;
+      return;
     }
 
-    function onKeyDown(event) {
+    function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'ArrowRight') {
         goNext();
       }
@@ -869,294 +906,139 @@ ${subscribeCommand}`,
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeIndex, viewMode]);
 
+  if (showIntroCards) {
+    return (
+      <section className="card glossary-card stagger-1">
+        <h2>Concept Mapping for Software Devs</h2>
+        <ConceptMappingContent />
+        <div className="guide-accordion-actions">
+          <button type="button" className="mode-btn active" onClick={continueFromConceptMapping}>
+            Continue to Guide
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <main className="page">
-      <section className="hero card">
-        <p className="eyebrow">Freenove Section 12 to Smart Home Workshop</p>
-        <h1>ESP32 Sensor to Home Assistant over MQTT (Developer Onramp)</h1>
-        <p>
-          You already code (or are sitting next to someone who already codes). This workshop assumes software
-          experience but treats microcontrollers as a new environment, mapping embedded concepts to familiar software
-          patterns while wiring the thermistor circuit, publishing MQTT values, and visualizing the sensor in Home
-          Assistant.
-        </p>
-        <p className="key-note">
-          <strong>Key workshop change:</strong> use <code>GPIO34</code> for thermistor analog input. <code>GPIO4</code>{' '}
-          (ADC2) may not read reliably while WiFi is active.
-        </p>
-        <div className="progress-row" aria-label="tutorial progress">
-          <span>
-            Progress: {completed}/{STEPS.length} steps complete
-          </span>
-          <strong>{progress}%</strong>
-        </div>
-        <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${progress}%` }} />
-        </div>
-      </section>
+    <section id="guided-steps" className="card stagger-1">
+      <div className="section-head">
+        <h2>Guided Steps (Embedded Onramp)</h2>
+        <button type="button" className="ghost-btn" onClick={resetChecklist}>
+          Reset
+        </button>
+      </div>
 
-      <section className="card glossary-card">
-        <h2>0) Concept Mapping for Software Devs</h2>
-        <p>Use this as a translation layer from backend/web concepts into embedded + IoT workflow.</p>
-        <div className="glossary-grid">
-          <article>
-            <h3>ESP32</h3>
-            <p>Think deployment target: a small edge device running your compiled firmware.</p>
-          </article>
-          <article>
-            <h3>Arduino IDE</h3>
-            <p>Editor + build + flash toolchain in one app for microcontroller projects.</p>
-          </article>
-          <article>
-            <h3>Breadboard</h3>
-            <p>Hardware wiring sandbox. Incorrect connections behave like wiring-time runtime bugs.</p>
-          </article>
-          <article>
-            <h3>setup() and loop()</h3>
-            <p>`setup()` is startup/boot hook; `loop()` is the always-running single-threaded event loop.</p>
-          </article>
-          <article>
-            <h3>MQTT</h3>
-            <p>Pub/sub event bus with topic-based routing, optimized for lightweight clients.</p>
-          </article>
-          <article>
-            <h3>Home Assistant</h3>
-            <p>Consumer app that turns MQTT streams into entities, history, and dashboards.</p>
-          </article>
-        </div>
-      </section>
+      <div className="progress-row" aria-label="guided step progress">
+        <span>
+          Progress: {completed}/{STEPS.length} steps complete
+        </span>
+        <strong>{progress}%</strong>
+      </div>
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${progress}%` }} />
+      </div>
 
-      <section className="card reference-card">
-        <h2>Reference Files</h2>
-        <p>Use these assets during the workshop.</p>
-        <ul>
-          <li>
-            <a href={tutorialPdf} target="_blank" rel="noreferrer">
-              C_Tutorial.pdf
-            </a>{' '}
-            - full project walkthroughs and tutorial.
-          </li>
-          <li>
-            <a href={completedSketch} target="_blank" rel="noreferrer">
-              Sketch_12.1.Thermometer.ino
-            </a>{' '}
-            - completed reference implementation.
-          </li>
-        </ul>
-      </section>
+      <div className="mode-switch" role="tablist" aria-label="step view mode">
+        <button
+          type="button"
+          className={`mode-btn ${viewMode === 'accordion' ? 'active' : ''}`}
+          onClick={() => setViewMode('accordion')}
+        >
+          Accordion Mode
+        </button>
+        <button
+          type="button"
+          className={`mode-btn ${viewMode === 'focus' ? 'active' : ''}`}
+          onClick={() => setViewMode('focus')}
+        >
+          Focus Mode
+        </button>
+        {instructorMode ? <span className="debug-chip">Instructor Mode (`debug=1`)</span> : null}
+      </div>
 
-      <section className="card stagger-1">
-        <div className="section-head">
-          <h2>1) Guided Steps (Embedded Onramp)</h2>
-          <button type="button" className="ghost-btn" onClick={resetChecklist}>
-            Reset
-          </button>
-        </div>
-
-        <div className="mode-switch" role="tablist" aria-label="step view mode">
-          <button
-            type="button"
-            className={`mode-btn ${viewMode === 'accordion' ? 'active' : ''}`}
-            onClick={() => setViewMode('accordion')}
-          >
-            Accordion Mode
-          </button>
-          <button
-            type="button"
-            className={`mode-btn ${viewMode === 'focus' ? 'active' : ''}`}
-            onClick={() => setViewMode('focus')}
-          >
-            Focus Mode
-          </button>
-          {instructorMode ? (
-            <span className="debug-chip">Instructor Mode (`debug=1`)</span>
-          ) : null}
-        </div>
-
-        {viewMode === 'accordion' ? (
-          <div className="step-list">
-            {STEPS.map((step, index) => {
-              const isOpen = step.id === activeStepId;
-              const isDone = Boolean(checklist[step.id]);
-              return (
-                <article
-                  key={step.id}
-                  className={`step-card ${isOpen ? 'open' : ''} ${isDone ? 'done' : ''}`}
+      {viewMode === 'accordion' ? (
+        <div className="step-list">
+          {STEPS.map((step, index) => {
+            const isOpen = step.id === activeStepId;
+            const isDone = Boolean(checklist[step.id]);
+            return (
+              <article key={step.id} className={`step-card ${isOpen ? 'open' : ''} ${isDone ? 'done' : ''}`}>
+                <button
+                  type="button"
+                  className="step-trigger"
+                  onClick={() => setActiveStepId(step.id)}
+                  aria-expanded={isOpen}
                 >
-                  <button
-                    type="button"
-                    className="step-trigger"
-                    onClick={() => setActiveStepId(step.id)}
-                    aria-expanded={isOpen}
-                  >
-                    <span className="step-count">Step {index + 1}</span>
-                    <span className="step-title">{step.title}</span>
-                    <span className="step-phase">{step.phase}</span>
-                  </button>
+                  <span className="step-count">Step {index + 1}</span>
+                  <span className="step-title">{step.title}</span>
+                  <span className="step-phase">{step.phase}</span>
+                </button>
 
-                  {isOpen ? (
-                    <div className="step-panel">
-                      <StepContent
-                        step={step}
-                        snippet={stepSnippets[step.id]}
-                        isDone={isDone}
-                        onToggleDone={() => toggleDone(step.id)}
-                        instructorMode={instructorMode}
-                        instructorNotes={INSTRUCTOR_NOTES[step.id]}
-                        learningNote={LEARNING_NOTES[step.id]}
-                        codeCards={codeCards}
-                        onToggleCodeCard={toggleCodeCard}
-                        onResetCodeCards={resetCodeCards}
-                      />
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
+                {isOpen ? (
+                  <div className="step-panel">
+                    <StepContent
+                      step={step}
+                      snippet={stepSnippets[step.id]}
+                      snippetLanguage={stepSnippetLanguages[step.id]}
+                      isDone={isDone}
+                      onToggleDone={() => toggleDone(step.id)}
+                      completeVariant="prominent"
+                      instructorMode={instructorMode}
+                      instructorNotes={INSTRUCTOR_NOTES[step.id]}
+                      learningNote={LEARNING_NOTES[step.id]}
+                      codeCards={codeCards}
+                      onToggleCodeCard={toggleCodeCard}
+                      onResetCodeCards={resetCodeCards}
+                    />
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <article className="focus-stage">
+          <header>
+            <span className="step-count">
+              Step {activeIndex + 1}/{STEPS.length}
+            </span>
+            <h3>{activeStep.title}</h3>
+            <span className="step-phase">{activeStep.phase}</span>
+          </header>
+
+          <div className="focus-body">
+            <StepContent
+              step={activeStep}
+              snippet={stepSnippets[activeStep.id]}
+              snippetLanguage={stepSnippetLanguages[activeStep.id]}
+              isDone={Boolean(checklist[activeStep.id])}
+              onToggleDone={() => toggleDone(activeStep.id, true)}
+              showCompletionControl={false}
+              instructorMode={instructorMode}
+              instructorNotes={INSTRUCTOR_NOTES[activeStep.id]}
+              learningNote={LEARNING_NOTES[activeStep.id]}
+              codeCards={codeCards}
+              onToggleCodeCard={toggleCodeCard}
+              onResetCodeCards={resetCodeCards}
+            />
           </div>
-        ) : (
-          <article className="focus-stage">
-            <header>
-              <span className="step-count">
-                Step {activeIndex + 1}/{STEPS.length}
-              </span>
-              <h3>{activeStep.title}</h3>
-              <span className="step-phase">{activeStep.phase}</span>
-            </header>
 
-            <div className="focus-body">
-              <StepContent
-                step={activeStep}
-                snippet={stepSnippets[activeStep.id]}
-                isDone={Boolean(checklist[activeStep.id])}
-                onToggleDone={() => toggleDone(activeStep.id, true)}
-                instructorMode={instructorMode}
-                instructorNotes={INSTRUCTOR_NOTES[activeStep.id]}
-                learningNote={LEARNING_NOTES[activeStep.id]}
-                codeCards={codeCards}
-                onToggleCodeCard={toggleCodeCard}
-                onResetCodeCards={resetCodeCards}
-              />
-            </div>
-
-            <footer className="focus-nav">
-              <button type="button" className="nav-btn" onClick={goPrevious} disabled={activeIndex === 0}>
-                Previous
-              </button>
-              <button
-                type="button"
-                className="nav-btn"
-                onClick={goNext}
-                disabled={activeIndex === STEPS.length - 1}
-              >
-                Next
-              </button>
-            </footer>
-          </article>
-        )}
-      </section>
-
-      <section className="card stagger-2">
-        <h2>2) Configuration Builder</h2>
-        <p>Enter your local values once. Use the generated snippets in your sketch and Home Assistant config.</p>
-
-        <div className="grid form-grid">
-          <label>
-            WiFi SSID
-            <input name="wifiSsid" value={config.wifiSsid} onChange={handleInput} />
-          </label>
-          <label>
-            WiFi Password
-            <input name="wifiPassword" value={config.wifiPassword} onChange={handleInput} />
-          </label>
-          <label>
-            MQTT Broker IP
-            <input name="brokerIp" value={config.brokerIp} onChange={handleInput} />
-          </label>
-          <label>
-            MQTT Port
-            <input name="brokerPort" value={config.brokerPort} onChange={handleInput} />
-          </label>
-          <label>
-            MQTT Topic
-            <input name="topic" value={config.topic} onChange={handleInput} />
-          </label>
-          <label>
-            Sensor Name
-            <input name="sensorName" value={config.sensorName} onChange={handleInput} />
-          </label>
-          <label>
-            Device Name
-            <input name="deviceName" value={config.deviceName} onChange={handleInput} />
-          </label>
-          <label>
-            Publish Interval (seconds)
-            <input name="intervalSeconds" value={config.intervalSeconds} onChange={handleInput} />
-          </label>
-        </div>
-
-        <h3>Sketch constants</h3>
-        <CodeBlock code={firmwareSnippet} />
-
-        <h3>Home Assistant YAML</h3>
-        <CodeBlock code={homeAssistantYaml} />
-
-        <h3>Local verification commands</h3>
-        <CodeBlock code={testCommands} />
-      </section>
-
-      <section className="card stagger-3">
-        <h2>3) Thermistor Math Sandbox</h2>
-        <p>
-          Freenove section 12 uses a Beta model (R0=10k, Beta=3950). Move the ADC value and inspect computed
-          voltage, resistance, and temperature.
-        </p>
-
-        <label className="slider-label" htmlFor="adc-slider">
-          ADC reading: <strong>{adc}</strong>
-        </label>
-        <input
-          id="adc-slider"
-          type="range"
-          min="1"
-          max="4094"
-          value={adc}
-          onChange={(event) => setAdc(Number(event.target.value))}
-        />
-
-        <div className="grid calc-grid">
-          <article>
-            <h3>Voltage</h3>
-            <p>{calc.voltage.toFixed(3)} V</p>
-          </article>
-          <article>
-            <h3>Thermistor R</h3>
-            <p>{calc.resistance.toFixed(3)} kOhm</p>
-          </article>
-          <article>
-            <h3>Temperature</h3>
-            <p>{calc.tempC.toFixed(2)} C</p>
-          </article>
-        </div>
-      </section>
-
-      <section className="card stagger-4 tips">
-        <h2>4) Troubleshooting</h2>
-        <ul>
-          <li>If board is not detected, try a different USB cable (data-capable), then reconnect.</li>
-          <li>If upload fails, verify board type and serial port in Arduino IDE Tools menu.</li>
-          <li>If no MQTT messages appear, verify broker IP and ESP32 WiFi subnet match.</li>
-          <li>If Home Assistant sensor is unavailable, confirm topic string matches exactly.</li>
-          <li>If values jump wildly, check thermistor orientation and fixed resistor value (10k).</li>
-        </ul>
-        {instructorMode ? (
-          <>
-            <h3>Instructor Diagnostics</h3>
-            <p>Use these commands during workshops to quickly isolate environment-level issues.</p>
-            <CodeBlock code={INSTRUCTOR_DIAGNOSTICS} />
-          </>
-        ) : null}
-      </section>
-    </main>
+          <footer className="focus-nav">
+            <button type="button" className="nav-btn" onClick={goPrevious} disabled={activeIndex === 0}>
+              Previous
+            </button>
+            <button
+              type="button"
+              className="nav-btn primary-btn"
+              onClick={goNextWithAutoComplete}
+              disabled={activeIndex === STEPS.length - 1}
+            >
+              Next
+            </button>
+          </footer>
+        </article>
+      )}
+    </section>
   );
 }

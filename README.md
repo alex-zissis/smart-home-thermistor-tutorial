@@ -32,9 +32,10 @@ Build output is in `tutorial-web/dist` and can be deployed to static hosting.
 - Teaching aids include concept mapping from common software patterns to embedded/MQTT workflows.
 - Visuals included: IDE setup flow, serial monitor preview, Blink circuit image from absolute page 42, and thermistor circuit image from page 115.
 - Inline coding cards in the firmware step guide learners to implement `setupWifi`, `setupMqtt`, `calculateTempC`, and `report` from stubs.
-- Workshop reference assets now live in `tutorial-web/src/assets`: `C_Tutorial.pdf` and `Sketch_12.1.Thermometer.ino`.
+- Workshop reference assets now live in `tutorial-web/src/assets`: `C_Tutorial.pdf`, `Sketch_12.1.Thermometer.ino`, and `docker-compose.reference.yaml`.
 - Step-by-step completion checklist with local progress persistence.
-- Guided Steps support Accordion Mode and Focus Mode (slideshow-style with Prev/Next and arrow keys).
+- Uses TanStack Router for page routes: `/`, `/config`, `/math`, `/troubleshooting`.
+- Guided Steps default to Focus Mode and support deep-link query params on the guide page, e.g. `/?mode=focus&step=mqtt_flash` or `/?mode=accordion&step=breadboard`.
 - Instructor Mode is enabled by URL query param `?debug=1` and reveals coaching notes per step plus workshop diagnostics commands.
 - Config builder for WiFi/MQTT values.
 - Generated snippets for Arduino sketch constants, Home Assistant YAML, and MQTT verification commands.
