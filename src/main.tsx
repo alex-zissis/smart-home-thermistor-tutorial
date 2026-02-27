@@ -13,6 +13,22 @@ import MathPage from './pages/MathPage';
 import TroubleshootingPage from './pages/TroubleshootingPage';
 import './styles.css';
 
+function resolveBasepath(): string {
+  const configuredBase = import.meta.env.BASE_URL;
+  if (configuredBase && configuredBase !== '/' && configuredBase !== './') {
+    return configuredBase.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('github.io')) {
+    const firstPathSegment = window.location.pathname.split('/').filter(Boolean)[0];
+    if (firstPathSegment) {
+      return `/${firstPathSegment}`;
+    }
+  }
+
+  return '/';
+}
+
 const rootRoute = createRootRoute({
   component: AppShell
 });
@@ -48,7 +64,10 @@ const routeTree = rootRoute.addChildren([
   troubleshootingRoute
 ]);
 
-const router = createRouter({ routeTree });
+const router = createRouter({
+  routeTree,
+  basepath: resolveBasepath()
+});
 
 declare module '@tanstack/react-router' {
   interface Register {
