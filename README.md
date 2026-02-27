@@ -2,6 +2,8 @@
 
 Interactive client-side tutorial for building a Freenove Section 12 thermistor sensor and integrating it with Home Assistant over MQTT.
 
+Live site: https://alex-zissis.github.io/smart-home-thermistor-tutorial/
+
 ## Run locally
 
 ```bash
