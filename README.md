@@ -24,7 +24,8 @@ Build output is in `tutorial-web/dist` and can be deployed to static hosting.
 ## Pages hosting notes
 
 - `vite.config.js` uses `base: './'` so the app can be served from a subpath.
-- For GitHub Pages, publish the `dist` folder (or use an action).
+- GitHub Pages deploy is handled by `.github/workflows/deploy-pages.yml` on push to `main`.
+- Do not commit `dist/` or `docs/`; Actions builds from source and deploys the artifact.
 - For Google-hosted static pages, upload `dist` contents as-is.
 
 ## What is interactive
