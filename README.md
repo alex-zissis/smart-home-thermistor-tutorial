@@ -36,6 +36,7 @@ Build output is in `tutorial-web/dist` and can be deployed to static hosting.
 - Visuals included: IDE setup flow, serial monitor preview, Blink circuit image from absolute page 42, and thermistor circuit image from page 115.
 - Inline coding cards in the firmware step guide learners to implement `setupWifi`, `setupMqtt`, `calculateTempC`, and `report` from stubs.
 - Workshop reference assets now live in `tutorial-web/src/assets`: `C_Tutorial.pdf`, `Sketch_12.1.Thermometer.ino`, and `docker-compose.reference.yaml`.
+- Step 2: Add ESP32 Board Support — this will take a while (downloading board cores, toolchains, and flashing firmware can be time-consuming).
 - Step-by-step completion checklist with local progress persistence.
 - Uses TanStack Router for page routes: `/`, `/config`, `/math`, `/troubleshooting`.
 - Guided Steps default to Focus Mode and support deep-link query params on the guide page, e.g. `/?mode=focus&step=mqtt_flash` or `/?mode=accordion&step=breadboard`.

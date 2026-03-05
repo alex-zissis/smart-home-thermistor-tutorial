@@ -3,16 +3,21 @@ import CodeBlock, { type CodeLanguage } from '../components/CodeBlock';
 import { ConceptMappingContent } from '../components/GuideInfoContent';
 import breadboardFromPdf from '../assets/section12-page115.png';
 import blinkFromPdf from '../assets/section1-blink-page42.png';
+import chooseBoard from '../assets/choose_board.png';
+import uploadSpeed from '../assets/upload_speed.png';
+import serialPort from '../assets/serial_port.png';
+import haOutput from '../assets/output.png';
 
-type VisualType = 'ide' | 'blink' | 'breadboard' | 'serial';
+type VisualType = 'blink' | 'breadboard' | 'serial' | 'board-config' | 'ha-output';
 
 type Step = {
   id: string;
   phase: string;
   title: string;
   summary: string;
-  details: string[];
+  details: (string | React.ReactNode)[];
   visual?: VisualType;
+  optional?: boolean;
 };
 
 type LearningNote = {
@@ -43,11 +48,10 @@ const STEPS: Step[] = [
     title: 'Install Arduino IDE 2',
     summary: 'Start from zero: install Arduino IDE so you can upload code to the ESP32.',
     details: [
-      'Download Arduino IDE 2 from arduino.cc/en/software and install it.',
+      <>Download Arduino IDE 2 from <a href='https://www.arduino.cc/en/software' target='_blank' rel='noopener noreferrer'>arduino.cc/en/software</a> and install it</>,
       'Open Arduino IDE once after install so it creates its settings folders.',
-      'Connect ESP32 with a data USB cable (some USB cables are charge-only and will not work).'
-    ],
-    visual: 'ide'
+      'Connect ESP32 with a provided USB cable.'
+    ]
   },
   {
     id: 'add_esp32_board',
@@ -57,8 +61,22 @@ const STEPS: Step[] = [
     details: [
       'Open Arduino IDE -> Settings (or Preferences on macOS).',
       'Find Additional boards manager URLs and paste the ESP32 URL from the snippet.',
-      'Open Boards Manager, search ESP32, install Espressif Systems package.'
+      'Open Boards Manager, search ESP32, install Espressif Systems package.',
+      'Note: Installing ESP32 board support may take a while — downloading cores/toolchains can be slow; expect several minutes.'
     ]
+  },
+
+  {
+    id: 'configure_board',
+    phase: 'Setup',
+    title: 'Configure Board & Port',
+    summary: 'Tell Arduino IDE which board you are targeting and which port it is connected to before uploading.',
+    details: [
+      'Tools → Board → ESP32 Arduino → ESP32 Wrover Module.',
+      'Tools → Upload Speed → 115200.',
+      'Tools → Port → select the USB port your ESP32 is connected to (usually the only new port that appeared after plugging in).'
+    ],
+    visual: 'board-config'
   },
   {
     id: 'blink_warmup',
@@ -68,11 +86,22 @@ const STEPS: Step[] = [
       'After ESP32 board support is installed, do one fast flash cycle with Blink to get comfortable with breadboard wiring and upload flow.',
     details: [
       'Wire the LED circuit exactly like the Freenove image from absolute page 42.',
+      <strong key="resistor-callout" style={{ color: 'var(--accent, #e07b00)' }}>⚠ Use a 220Ω resistor for this circuit — it limits current to protect the LED.</strong>,
       'Select board + port, then upload Blink to verify toolchain and cable/port setup.',
-      'Expect a steady blink; this is your hardware/IDE sanity check before the main workshop sketch.'
+      'Expect a steady blink; this is your hardware/IDE sanity check before the main workshop sketch.',
+      <details key="breadboard-primer" className="hint-details">
+        <summary>Breadboard primer — read before wiring</summary>
+        <ul>
+          <li><strong>Rows:</strong> think of each row as a node — every hole in it is the same electrical point. Put two leads in the <em>same</em> row and they're connected. Put them in <em>different</em> rows and they're separate. Most wiring mistakes come from landing a lead in the wrong row.</li>
+          <li><strong>Resistors:</strong> limit current flow (measured in ohms). For this Blink circuit you need a <strong>220Ω resistor</strong> — it sits in series with the LED to keep current at a safe level. Without it you risk burning out the LED. (The thermistor circuit in the next step uses a different value — 10kΩ — for a different purpose.)<br /><em>Placement: one leg per row. Both legs in the same row = short circuit.</em></li>
+          <li><strong>Jumper wires:</strong> explicit connections between rows — like drawing a wire between two nodes on a circuit diagram.</li>
+          <li><strong>Ground (GND):</strong> the shared zero. All voltage is measured relative to it. If components don't share GND with the ESP32, readings have no common reference and will be wrong or undefined.</li>
+        </ul>
+      </details>
     ],
     visual: 'blink'
   },
+
   {
     id: 'install_libraries',
     phase: 'Setup',
@@ -104,8 +133,9 @@ const STEPS: Step[] = [
     title: 'Implement the Firmware (Functions + Loop)',
     summary: 'Set project constants, implement helper functions, and structure the main loop for periodic reporting.',
     details: [
-      'Set WIFI_SSID and WIFI_PASSWORD to your local network.',
-      'Set MQTT_BROKER, MQTT_PORT, and MQTT_TOPIC to your Mosquitto values.',
+      'Set WIFI_SSID to the workshop network name.',
+      'Set MQTT_BROKER and MQTT_PORT to Alex\'s ngrok endpoint (ask Alex for the current values).',
+      'Set MQTT_TOPIC to your group name (e.g. "group-1").',
       'Implement setupWifi(), setupMqtt(), calculateTempC(), and report() based on step guidance.',
       'Ensure loop() runs mqtt.loop() every iteration and only reports every 10 seconds.',
       'Save and compile cleanly before moving to upload/verification.'
@@ -118,66 +148,85 @@ const STEPS: Step[] = [
     summary:
       'After wiring + implementation, upload the thermistor sketch and verify runtime logs in serial monitor at 115200 baud.',
     details: [
-      'Tools -> Board -> ESP32 Arduino -> ESP32 Dev Module (or your exact board).',
+      'Tools -> Board -> ESP32 Arduino -> ESP32 Wrover Module.',
       'Tools -> Port -> select the USB port for your ESP32.',
       'Click Upload, open Serial Monitor, and set baud to 115200 (must match Serial.begin(115200)).'
     ],
     visual: 'serial'
   },
   {
+    id: 'workshop_submit',
+    phase: 'Workshop',
+    title: 'Publish to the Workshop Dashboard',
+    summary: 'The workshop network blocks direct LAN communication between devices — the simplest path is to publish straight to Alex\'s broker via ngrok.',
+    details: [
+      'Ask Alex for the current ngrok host and port, then set MQTT_BROKER and MQTT_PORT in your sketch.',
+      'Set MQTT_TOPIC to your group name (e.g. "group-1" or "table-3") — this keeps everyone\'s data separate.',
+      'Upload the sketch and confirm temperature values are streaming in Serial Monitor.',
+      'Come find Alex — he\'ll add your sensor to the shared Home Assistant dashboard.',
+    ],
+    visual: 'ha-output'
+  },
+  {
     id: 'services',
-    phase: 'Backend',
+    phase: 'Advanced',
     title: 'Start Mosquitto and Home Assistant',
     summary: 'Bring up broker + Home Assistant containers from your workshop compose file.',
     details: [
-      'From workshop folder, start services using Docker Compose.',
+      'Note: the workshop network blocks direct LAN communication, so this path may not work reliably. The recommended route is publishing to Alex\'s ngrok broker instead.',
+      'From workshop folder, start services using Docker Compose (reference file below).',
       'Wait until both containers are running before testing messages.',
-      'Your current compose uses host network mode, so broker should be reachable on LAN IP.'
-    ]
+      'Your compose uses host network mode, so the broker should be reachable on your LAN IP.'
+    ],
+    optional: true
   },
   {
     id: 'mqtt_test',
-    phase: 'Backend',
+    phase: 'Advanced',
     title: 'Confirm MQTT Messages Arrive',
     summary: 'Subscribe to your topic and verify values every publish interval.',
     details: [
       'Run mosquitto_sub with the same broker/port/topic used in the sketch.',
       'You should see values like 22.35 every ~10 seconds.',
       'If no messages: check ESP32 serial output and broker IP correctness.'
-    ]
+    ],
+    optional: true
   },
   {
     id: 'ha_mqtt',
-    phase: 'Home Assistant',
+    phase: 'Advanced',
     title: 'Enable MQTT Integration in Home Assistant',
     summary: 'Link Home Assistant to the broker before creating entities.',
     details: [
       'In Home Assistant: Settings -> Devices & Services -> Add Integration -> MQTT.',
       'Enter broker host and port. Use auth only if broker requires credentials.',
       'After success, Home Assistant can subscribe to topic data.'
-    ]
+    ],
+    optional: true
   },
   {
     id: 'ha_entity',
-    phase: 'Home Assistant',
+    phase: 'Advanced',
     title: 'Create Temperature Sensor Entity',
     summary: 'Add YAML for an MQTT sensor bound to your topic, then reload or restart HA.',
     details: [
       'Name and unique_id should stay stable so dashboards keep working.',
       'Use device_class temperature and state_class measurement for proper HA behavior.',
       'After reload, verify new entity appears under Developer Tools -> States.'
-    ]
+    ],
+    optional: true
   },
   {
     id: 'dashboard',
-    phase: 'Validation',
+    phase: 'Advanced',
     title: 'Add Dashboard Card and Validate End to End',
     summary: 'Place the entity on a dashboard and test physical temperature changes.',
     details: [
       'Add Sensor or Gauge card for your MQTT entity.',
       'Touch or warm the thermistor and watch value change in Home Assistant.',
       'If stale values persist, verify topic string match and retained publish behavior.'
-    ]
+    ],
+    optional: true
   }
 ];
 
@@ -186,6 +235,32 @@ https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32
 
 Then install in Boards Manager:
 ESP32 by Espressif Systems`;
+
+const DOCKER_COMPOSE_SNIPPET = `services:
+  homeassistant:
+    container_name: homeassistant
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    volumes:
+      - ./ha/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      TZ: Australia/Sydney
+
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:2.0
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    environment:
+      TZ: Australia/Sydney`;
 
 const BLINK_WARMUP_SNIPPET = `// Warmup: simple blink (adapt LED pin to your page 42 wiring if needed)
 const int LED_PIN = 4;
@@ -229,12 +304,14 @@ const FULL_FIRMWARE_TEMPLATE_SNIPPET = `#include <WiFi.h>
 
 #define PIN_ANALOG_IN 34
 
-const char *WIFI_SSID = "YOUR_WIFI_SSID";
-const char *WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char *WIFI_SSID = "Crystalbrook Connect";
 
-const char *MQTT_BROKER = "192.168.x.x";
-const int MQTT_PORT = 1883;
-const char *MQTT_TOPIC = "home/workshop/temperature";
+// This should be your local PC with docker running the Mosquitto broker.
+// The hotel seems to have an aggresive firewall. I've got a public endpoint
+// exposed via Ngrok that we can use instead.
+const char *MQTT_BROKER = "1.tcp.au.ngrok.io"; // Alex's laptop via Ngrok
+const int MQTT_PORT = 21083; // port exposed on ngrok
+const char *MQTT_TOPIC = "home/workshop/group_name/temperature";
 
 unsigned long lastSendMs = 0;
 
@@ -315,7 +392,7 @@ const CODE_CARDS: CodeCard[] = [
     title: 'Card A: write setupWifi()',
     objective: 'Connect ESP32 to WiFi and block until connected.',
     stub: `void setupWifi() {
-  // TODO: call WiFi.begin(WIFI_SSID, WIFI_PASSWORD)
+  // TODO: call WiFi.begin(WIFI_SSID) — no password needed for this network
   // TODO: loop until WiFi.status() == WL_CONNECTED
   // TODO: print local IP when connected
 }`,
@@ -335,8 +412,9 @@ const CODE_CARDS: CodeCard[] = [
     objective: 'Connect PubSubClient to broker and retry until connected.',
     stub: `void setupMqtt() {
   // TODO: mqtt.setServer(MQTT_BROKER, MQTT_PORT)
-  // TODO: generate client ID
-  // TODO: loop until mqtt.connect(...) returns true
+  // TODO: generate a unique client ID from hardware MAC:
+  //   String clientId = "esp32-sensor-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+  // TODO: loop until mqtt.connect(clientId.c_str()) returns true
 }`,
     doneWhen: [
       'mqtt.connected() becomes true after boot.',
@@ -345,7 +423,7 @@ const CODE_CARDS: CodeCard[] = [
     ],
     hints: [
       'Call mqtt.setServer once before attempting connect.',
-      'Unique client IDs prevent session collisions across multiple boards.'
+      'Use ESP.getEfuseMac() cast to HEX for a unique client ID — it uses the chip\'s hardware MAC so no two boards will clash on the same broker.'
     ]
   },
   {
@@ -378,7 +456,8 @@ const CODE_CARDS: CodeCard[] = [
       'Retained message survives subscriber reconnect.'
     ],
     hints: [
-      'Use snprintf into a fixed-size char buffer.',
+      'Use snprintf into a fixed-size char buffer — e.g. char payload[16]; snprintf(payload, sizeof(payload), "%.2f", tempC);',
+      'Print both the topic and payload to serial — makes it easy to confirm the right value is going to the right topic.',
       'Keep report() only about publish/logging; calculate temp elsewhere.'
     ]
   }
@@ -544,22 +623,6 @@ function writeGuideRouteState(mode: 'accordion' | 'focus', stepId: string, repla
   window.history.pushState(null, '', nextUrl);
 }
 
-function IdeFlowVisual() {
-  return (
-    <figure className="mini-visual" aria-label="Arduino IDE setup flow">
-      <div className="flow-grid">
-        <div className="flow-node">1. Install Arduino IDE</div>
-        <div className="flow-arrow">{'->'}</div>
-        <div className="flow-node">2. Add ESP32 boards URL</div>
-        <div className="flow-arrow">{'->'}</div>
-        <div className="flow-node">3. Install ESP32 package</div>
-        <div className="flow-arrow">{'->'}</div>
-        <div className="flow-node">4. Install PubSubClient</div>
-      </div>
-    </figure>
-  );
-}
-
 function SerialMonitorVisual() {
   return (
     <figure className="mini-visual" aria-label="Serial monitor preview">
@@ -573,6 +636,34 @@ function SerialMonitorVisual() {
         </div>
       </div>
     </figure>
+  );
+}
+
+function HAOutputVisual() {
+  return (
+    <figure className="mini-visual" aria-label="Home Assistant dashboard showing temperature sensor">
+      <img src={haOutput} alt="Home Assistant dashboard card displaying ESP32 thermistor temperature" />
+      <figcaption>What it looks like on the shared workshop dashboard once Alex adds your sensor.</figcaption>
+    </figure>
+  );
+}
+
+function BoardConfigVisual() {
+  return (
+    <div className="mini-visual" aria-label="Arduino IDE board configuration screenshots">
+      <figure>
+        <img src={chooseBoard} alt="Arduino IDE Tools menu showing ESP32 Wrover Module board selection" />
+        <figcaption>Step 1: Tools → Board → ESP32 Arduino → ESP32 Wrover Module</figcaption>
+      </figure>
+      <figure>
+        <img src={uploadSpeed} alt="Arduino IDE Tools menu showing Upload Speed set to 115200" />
+        <figcaption>Step 2: Tools → Upload Speed → 115200</figcaption>
+      </figure>
+      <figure>
+        <img src={serialPort} alt="Arduino IDE Tools menu showing Port selection" />
+        <figcaption>Step 3: Tools → Port → select your ESP32 USB port</figcaption>
+      </figure>
+    </div>
   );
 }
 
@@ -599,14 +690,17 @@ function BreadboardVisual() {
 }
 
 function StepVisual({ type }: { type: VisualType }) {
+  if (type === 'ha-output') {
+    return <HAOutputVisual />;
+  }
+  if (type === 'board-config') {
+    return <BoardConfigVisual />;
+  }
   if (type === 'blink') {
     return <BlinkVisual />;
   }
   if (type === 'breadboard') {
     return <BreadboardVisual />;
-  }
-  if (type === 'ide') {
-    return <IdeFlowVisual />;
   }
   if (type === 'serial') {
     return <SerialMonitorVisual />;
@@ -711,10 +805,15 @@ function StepContent({
 }: StepContentProps) {
   return (
     <>
+      {step.optional ? (
+        <div className="optional-banner">
+          <strong>⚠ Advanced — optional path.</strong> The workshop network blocks direct LAN communication, so this may not work reliably. The recommended route is publishing to Alex's ngrok broker (see previous step).
+        </div>
+      ) : null}
       <p>{step.summary}</p>
       <ul>
-        {step.details.map((detail) => (
-          <li key={detail}>{detail}</li>
+        {step.details.map((detail, i) => (
+          <li key={typeof detail === 'string' ? detail : i}>{detail}</li>
         ))}
       </ul>
       {learningNote ? (
@@ -814,7 +913,8 @@ export default function GuidePage() {
     add_esp32_board: BOARD_MANAGER_SNIPPET,
     install_libraries: LIBRARY_SNIPPET,
     first_upload: SERIAL_SNIPPET,
-    mqtt_flash: FULL_FIRMWARE_TEMPLATE_SNIPPET
+    mqtt_flash: FULL_FIRMWARE_TEMPLATE_SNIPPET,
+    services: DOCKER_COMPOSE_SNIPPET
   };
 
   const stepSnippetLanguages: Record<string, CodeLanguage> = {
@@ -822,7 +922,8 @@ export default function GuidePage() {
     add_esp32_board: 'plaintext',
     install_libraries: 'plaintext',
     first_upload: 'plaintext',
-    mqtt_flash: 'cpp'
+    mqtt_flash: 'cpp',
+    services: 'plaintext'
   };
 
   function setStepByIndex(index: number) {
@@ -942,17 +1043,17 @@ export default function GuidePage() {
       <div className="mode-switch" role="tablist" aria-label="step view mode">
         <button
           type="button"
-          className={`mode-btn ${viewMode === 'accordion' ? 'active' : ''}`}
-          onClick={() => setViewMode('accordion')}
-        >
-          Accordion Mode
-        </button>
-        <button
-          type="button"
           className={`mode-btn ${viewMode === 'focus' ? 'active' : ''}`}
           onClick={() => setViewMode('focus')}
         >
           Focus Mode
+        </button>
+         <button
+          type="button"
+          className={`mode-btn ${viewMode === 'accordion' ? 'active' : ''}`}
+          onClick={() => setViewMode('accordion')}
+        >
+          Accordion Mode
         </button>
         {instructorMode ? <span className="debug-chip">Instructor Mode (`debug=1`)</span> : null}
       </div>
@@ -963,7 +1064,7 @@ export default function GuidePage() {
             const isOpen = step.id === activeStepId;
             const isDone = Boolean(checklist[step.id]);
             return (
-              <article key={step.id} className={`step-card ${isOpen ? 'open' : ''} ${isDone ? 'done' : ''}`}>
+              <article key={step.id} className={`step-card ${isOpen ? 'open' : ''} ${isDone ? 'done' : ''} ${step.optional ? 'optional' : ''}`}>
                 <button
                   type="button"
                   className="step-trigger"
@@ -973,6 +1074,7 @@ export default function GuidePage() {
                   <span className="step-count">Step {index + 1}</span>
                   <span className="step-title">{step.title}</span>
                   <span className="step-phase">{step.phase}</span>
+                  {step.optional ? <span className="optional-badge">Advanced</span> : null}
                 </button>
 
                 {isOpen ? (
@@ -1005,6 +1107,7 @@ export default function GuidePage() {
             </span>
             <h3>{activeStep.title}</h3>
             <span className="step-phase">{activeStep.phase}</span>
+            {activeStep.optional ? <span className="optional-badge">Advanced — optional</span> : null}
           </header>
 
           <div className="focus-body">

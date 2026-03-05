@@ -581,6 +581,36 @@ h3 {
   padding-left: 1.15rem;
 }
 
+.optional-banner {
+  margin: 0 0 0.75rem;
+  border: 1px solid #f5c842;
+  border-radius: 10px;
+  background: #fffbea;
+  color: #5a4200;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.optional-badge {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #fff3cd;
+  color: #7a5000;
+  border: 1px solid #f5c842;
+  border-radius: 6px;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+}
+
+.step-card.optional .step-trigger {
+  opacity: 0.8;
+}
+
+.step-card.optional {
+  border-color: #f5c842;
+}
+
 .mini-visual {
   margin: 0.8rem 0 1rem;
   border: 1px solid var(--line);
