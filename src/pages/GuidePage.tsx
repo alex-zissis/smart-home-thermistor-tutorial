@@ -119,8 +119,8 @@ const STEPS: Step[] = [
     title: 'Build the Breadboard Circuit',
     summary: 'Wire the thermistor voltage divider exactly as shown before uploading code.',
     details: [
-      'Breadboard basics: each 5-hole row is connected horizontally; power rails run vertically.',
-      'Voltage divider: 3.3V -> thermistor -> ADC node -> 10k resistor -> GND.',
+      <strong key="resistor-callout" style={{ color: 'var(--accent, #e07b00)' }}>⚠ Use a 10kΩ resistor for this circuit — it forms the voltage divider with the thermistor.</strong>,
+      'Voltage divider: 3.3V → thermistor → ADC node → 10kΩ resistor → GND.',
       'Connect ADC node to ESP32 GPIO34 (PIN_ANALOG_IN = 34).',
       'Important override to the tutorial image: it shows GPIO4, but for this workshop you must move that wire to GPIO34.',
       'Reason: GPIO4 is ADC2 and can fail when WiFi is active.'
@@ -160,8 +160,8 @@ const STEPS: Step[] = [
     title: 'Publish to the Workshop Dashboard',
     summary: 'The workshop network blocks direct LAN communication between devices — the simplest path is to publish straight to Alex\'s broker via ngrok.',
     details: [
-      'Ask Alex for the current ngrok host and port, then set MQTT_BROKER and MQTT_PORT in your sketch.',
-      'Set MQTT_TOPIC to your group name (e.g. "group-1" or "table-3") — this keeps everyone\'s data separate.',
+      'The firmware template snippet is already configured with Alex\'s ngrok broker — unless you\'ve gone off and cowboyed the constants, this is what we\'ve set you up for.',
+      'Set MQTT_TOPIC to your group name (e.g. "group-1" or "table-3") — this keeps everyone\'s data separate on the shared broker.',
       'Upload the sketch and confirm temperature values are streaming in Serial Monitor.',
       'Come find Alex — he\'ll add your sensor to the shared Home Assistant dashboard.',
     ],
@@ -899,8 +899,9 @@ export default function GuidePage() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const completed = Object.values(checklist).filter(Boolean).length;
-  const progress = Math.round((completed / STEPS.length) * 100);
+  const requiredSteps = STEPS.filter((s) => !s.optional);
+  const completed = requiredSteps.filter((s) => checklist[s.id]).length;
+  const progress = Math.round((completed / requiredSteps.length) * 100);
 
   const activeIndex = Math.max(
     0,
@@ -1032,7 +1033,7 @@ export default function GuidePage() {
 
       <div className="progress-row" aria-label="guided step progress">
         <span>
-          Progress: {completed}/{STEPS.length} steps complete
+          Progress: {completed}/{requiredSteps.length} steps complete
         </span>
         <strong>{progress}%</strong>
       </div>
