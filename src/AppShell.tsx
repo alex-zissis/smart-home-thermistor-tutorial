@@ -1,6 +1,7 @@
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { ConceptMappingContent, ReferenceFilesContent } from './components/GuideInfoContent';
+import qrCode from './assets/qr_code.png';
 
 function GuideIcon() {
   return (
@@ -61,6 +62,7 @@ function FilesIcon() {
 export default function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [showSidebarNudge, setShowSidebarNudge] = useState(false);
+  const instructorMode = new URLSearchParams(window.location.search).get('debug') === '1';
 
   useEffect(() => {
     function syncConceptState(event?: Event) {
@@ -152,18 +154,34 @@ export default function AppShell() {
 
       <main className="page">
         <section className="hero card">
-          <p className="eyebrow">Freenove Section 12 to Smart Home Workshop</p>
-          <h1>ESP32 Sensor to Home Assistant over MQTT (Developer Onramp)</h1>
-          <p>
-            You already code (or are sitting next to someone who already codes). This workshop assumes software
-            experience but treats microcontrollers as a new environment, mapping embedded concepts to familiar software
-            patterns while wiring the thermistor circuit, publishing MQTT values, and visualizing the sensor in Home
-            Assistant.
-          </p>
-          <p className="key-note">
-            <strong>Key workshop change:</strong> use <code>GPIO34</code> for thermistor analog input. <code>GPIO4</code>{' '}
-            (ADC2) may not read reliably while WiFi is active.
-          </p>
+          <div className="hero-inner">
+            <div className="hero-text">
+              <p className="eyebrow">Freenove Section 12 to Smart Home Workshop</p>
+              <h1>ESP32 Sensor to Home Assistant over MQTT (Developer Onramp)</h1>
+              <p>
+                You already code (or are sitting next to someone who already codes). This workshop assumes software
+                experience but treats microcontrollers as a new environment, mapping embedded concepts to familiar software
+                patterns while wiring the thermistor circuit, publishing MQTT values, and visualizing the sensor in Home
+                Assistant.
+              </p>
+              <p className="key-note">
+                <strong>Key workshop change:</strong> use <code>GPIO34</code> for thermistor analog input. <code>GPIO4</code>{' '}
+                (ADC2) may not read reliably while WiFi is active.
+              </p>
+            </div>
+            {instructorMode ? (
+              <a
+                className="hero-qr"
+                href="https://bit.ly/devcamp-sensor"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Link to workshop site"
+              >
+                <span className="hero-qr-shorturl">bit.ly/devcamp-sensor</span>
+                <img src={qrCode} alt="QR code for workshop site" />
+              </a>
+            ) : null}
+          </div>
         </section>
 
         <Outlet />
